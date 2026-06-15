@@ -1561,33 +1561,51 @@ def agent_eval_page():
     )
     st.markdown(legend_html, unsafe_allow_html=True)
 
+    STATUS_ICON = {"Pass": "✅", "Watch": "⚠️", "Regression": "🔴", "Fail": "❌"}
+
     # Per-target expanders
     for ev in EVAL_TARGETS:
-        oc = eval_overall_color(ev["overall"])
-        header = f'{ev["name"]} — {badge(ev["overall"], oc)} — Score: {ev["score"]}/100 — Run: {ev["date"]}'
+        icon = STATUS_ICON.get(ev["overall"], "•")
+        header = f'{icon} {ev["name"]}  |  {ev["overall"]}  |  Score: {ev["score"]}/100  |  Run: {ev["date"]}'
         with st.expander(header, expanded=(ev["overall"] in ("Regression", "Fail"))):
+            # Mini pass-rate summary bar
+            tc_pass = sum(1 for t in ev["test_cases"] if t["result"] == "Pass")
+            tc_total = len(ev["test_cases"])
+            pct = int(tc_pass / tc_total * 100)
+            bar_color = eval_overall_color(ev["overall"])
+            summary_html = (
+                f'<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;font-size:13px;">'
+                f'<span style="color:#555;">Test cases:</span>'
+                f'<div style="flex:1;background:#e8e8e8;border-radius:4px;height:8px;">'
+                f'<div style="width:{pct}%;background:{bar_color};height:8px;border-radius:4px;"></div></div>'
+                f'<span style="font-weight:700;color:{bar_color};">{tc_pass}/{tc_total} passed</span>'
+                f'</div>'
+            )
+            st.markdown(summary_html, unsafe_allow_html=True)
+
             rows = ""
             for tc in ev["test_cases"]:
                 sc = EVAL_STATUS_COLOR.get(tc["result"], NAVY)
+                row_bg = "background:#fff8f8;" if tc["result"] in ("Regression", "Fail") else ("background:#fffbf0;" if tc["result"] == "Watch" else "")
                 rows += (
-                    f'<tr>'
-                    f'<td style="width:60px;font-weight:600;">{tc["id"]}</td>'
-                    f'<td style="width:140px;">{tc["category"]}</td>'
-                    f'<td>{tc["prompt"]}</td>'
-                    f'<td>{tc["expected"]}</td>'
-                    f'<td style="text-align:center;"><span style="color:{sc};font-weight:700;">{tc["result"]}</span></td>'
-                    f'<td style="color:#666;font-size:12px;">{tc["note"]}</td>'
+                    f'<tr style="{row_bg}">'
+                    f'<td style="width:60px;font-weight:600;padding:7px 8px;">{tc["id"]}</td>'
+                    f'<td style="width:140px;padding:7px 8px;">{tc["category"]}</td>'
+                    f'<td style="padding:7px 8px;">{tc["prompt"]}</td>'
+                    f'<td style="padding:7px 8px;">{tc["expected"]}</td>'
+                    f'<td style="text-align:center;padding:7px 8px;"><span style="color:{sc};font-weight:700;">{tc["result"]}</span></td>'
+                    f'<td style="color:#666;font-size:12px;padding:7px 8px;">{tc["note"]}</td>'
                     f'</tr>'
                 )
             table_html = (
                 '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-                '<thead><tr style="border-bottom:2px solid #e0e0e0;">'
-                '<th style="text-align:left;padding:6px 8px;">ID</th>'
-                '<th style="text-align:left;padding:6px 8px;">Category</th>'
-                '<th style="text-align:left;padding:6px 8px;">Prompt / Input</th>'
-                '<th style="text-align:left;padding:6px 8px;">Expected</th>'
-                '<th style="text-align:center;padding:6px 8px;">Result</th>'
-                '<th style="text-align:left;padding:6px 8px;">Notes</th>'
+                '<thead><tr style="border-bottom:2px solid #e0e0e0;background:#f7f7f7;">'
+                '<th style="text-align:left;padding:7px 8px;">ID</th>'
+                '<th style="text-align:left;padding:7px 8px;">Category</th>'
+                '<th style="text-align:left;padding:7px 8px;">Prompt / Input</th>'
+                '<th style="text-align:left;padding:7px 8px;">Expected</th>'
+                '<th style="text-align:center;padding:7px 8px;">Result</th>'
+                '<th style="text-align:left;padding:7px 8px;">Notes</th>'
                 '</tr></thead>'
                 f'<tbody>{rows}</tbody>'
                 '</table>'
