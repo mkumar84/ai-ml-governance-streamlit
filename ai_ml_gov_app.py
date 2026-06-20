@@ -1342,32 +1342,26 @@ def assess_page():
                 if m_scores:
                     m_avg = round(sum(m_scores) / len(m_scores))
                     m_color = risk_color(risk_band(m_avg))
-                    rows_html += f"""
-                    <div class="mscore-row">
-                        <div class="mscore-label">{m['title']}</div>
-                        <div class="mscore-track">
-                            <div class="mscore-fill" style="width:{m_avg}%;background:{m_color};"></div>
-                        </div>
-                        <div class="mscore-val" style="color:{m_color};">{m_avg}</div>
-                    </div>
-                    """
+                    rows_html += (
+                        f'<div class="mscore-row">'
+                        f'<div class="mscore-label">{m["title"]}</div>'
+                        f'<div class="mscore-track"><div class="mscore-fill" '
+                        f'style="width:{m_avg}%;background:{m_color};"></div></div>'
+                        f'<div class="mscore-val" style="color:{m_color};">{m_avg}</div>'
+                        f'</div>'
+                    )
                 else:
-                    rows_html += f"""
-                    <div class="mscore-row">
-                        <div class="mscore-label">{m['title']}</div>
-                        <div class="mscore-track"></div>
-                        <div class="mscore-val" style="color:#8A8475;">—</div>
-                    </div>
-                    """
+                    rows_html += (
+                        f'<div class="mscore-row">'
+                        f'<div class="mscore-label">{m["title"]}</div>'
+                        f'<div class="mscore-track"></div>'
+                        f'<div class="mscore-val" style="color:#8A8475;">\u2014</div>'
+                        f'</div>'
+                    )
             st.markdown(
-                f"""
-                <div class="product-card" style="margin-top:0.6rem;">
-                    <div style="font-weight:700;margin-bottom:0.6rem;color:{INK};">
-                        Module evidence breakdown
-                    </div>
-                    {rows_html}
-                </div>
-                """,
+                f'<div class="product-card" style="margin-top:0.6rem;">'
+                f'<div style="font-weight:700;margin-bottom:0.6rem;color:{INK};">'
+                f'Module evidence breakdown</div>{rows_html}</div>',
                 unsafe_allow_html=True,
             )
 
@@ -1389,16 +1383,16 @@ def assess_page():
                     delta_html = f"<span style='color:{dcolor};font-size:0.78rem;'>{arrow} {abs(delta)}</span>"
                 else:
                     delta_html = "<span style='color:#8A8475;font-size:0.78rem;'>baseline</span>"
-                rows_html += f"""
-                <div style="display:flex;align-items:center;gap:0.8rem;padding:0.4rem 0;
-                            border-bottom:1px solid #E5E0D5;">
-                    <div style="width:110px;font-size:0.8rem;color:#6B6557;">{h['date'].strftime('%b %d, %Y')}</div>
-                    <div style="width:60px;font-weight:700;color:{hcolor};">{h['score']}</div>
-                    <div style="width:110px;">{badge(h['band'], hcolor)}</div>
-                    <div style="width:80px;">{delta_html}</div>
-                    <div style="font-size:0.78rem;color:#8A8475;">Reviewed by {h['reviewer']}</div>
-                </div>
-                """
+                rows_html += (
+                    f'<div style="display:flex;align-items:center;gap:0.8rem;padding:0.4rem 0;'
+                    f'border-bottom:1px solid #E5E0D5;">'
+                    f'<div style="width:110px;font-size:0.8rem;color:#6B6557;">{h["date"].strftime("%b %d, %Y")}</div>'
+                    f'<div style="width:60px;font-weight:700;color:{hcolor};">{h["score"]}</div>'
+                    f'<div style="width:110px;">{badge(h["band"], hcolor)}</div>'
+                    f'<div style="width:80px;">{delta_html}</div>'
+                    f'<div style="font-size:0.78rem;color:#8A8475;">Reviewed by {h["reviewer"]}</div>'
+                    f'</div>'
+                )
                 prev_score = h["score"]
             st.markdown(
                 f'<div class="product-card" style="padding:0.6rem 1rem;">{rows_html}</div>',
