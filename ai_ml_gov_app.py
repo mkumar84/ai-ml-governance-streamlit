@@ -980,25 +980,44 @@ def portfolio_page():
     low = sum(1 for p in products if risk_band(p["score"]) == "Low Risk")
     overdue = sum(1 for p in products if p["review_date"] and p["review_date"] < date.today())
 
-    tiles = [
-        ("Registered Products", total, "across all business lines", NAVY),
-        ("High Risk", high, "blocked pending remediation", "#B3261E"),
-        ("Moderate Risk", moderate, "conditional approval", AMBER),
-        ("Low Risk", low, "approved to proceed", FOREST),
-        ("Reviews Overdue", overdue, "recertification required", "#B3261E" if overdue else FOREST),
-    ]
-    cols = st.columns(5)
-    for col, (label, num, sub, color) in zip(cols, tiles):
-        col.markdown(
-            f"""
-            <div class="metric-tile" style="--accent:{color}">
-                <div class="num">{num}</div>
-                <div class="label">{label}</div>
-                <div class="sub">{sub}</div>
+    # Headline: one dominant number (what needs attention right now), with
+    # the full breakdown as a compact secondary strip — not five equally
+    # weighted tiles competing for attention.
+    needs_attention = high + overdue
+    headline_color = "#B3261E" if needs_attention else FOREST
+    st.markdown(
+        f"""
+        <div class="metric-tile" style="--accent:{headline_color};padding:1.1rem 1.4rem;">
+            <div class="num" style="font-size:2.6rem;color:{headline_color};">{needs_attention}</div>
+            <div class="label" style="font-size:1rem;">
+                {"systems need attention" if needs_attention else "All systems in good standing"}
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            <div class="sub">{high} High Risk &nbsp;\u00b7&nbsp; {overdue} review(s) overdue &nbsp;\u00b7&nbsp; out of {total} registered</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("📊 Full portfolio breakdown", expanded=False):
+        tiles = [
+            ("Registered Products", total, "across all business lines", NAVY),
+            ("High Risk", high, "blocked pending remediation", "#B3261E"),
+            ("Moderate Risk", moderate, "conditional approval", AMBER),
+            ("Low Risk", low, "approved to proceed", FOREST),
+            ("Reviews Overdue", overdue, "recertification required", "#B3261E" if overdue else FOREST),
+        ]
+        cols = st.columns(5)
+        for col, (label, num, sub, color) in zip(cols, tiles):
+            col.markdown(
+                f"""
+                <div class="metric-tile" style="--accent:{color}">
+                    <div class="num">{num}</div>
+                    <div class="label">{label}</div>
+                    <div class="sub">{sub}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
     st.write("")
 
@@ -1042,59 +1061,56 @@ def portfolio_page():
                 )
             st.caption("See the **Findings** page for the full control-level breakdown behind every score.")
 
-    fc1, fc2, fc3 = st.columns(3)
-    risk_filter = fc1.selectbox(
-        "Risk", ["All risk", "High risk", "Moderate", "Low risk", "Not assessed"]
-    )
-    line_filter = fc2.selectbox("Business line", ["All business lines"] + BUSINESS_LINES)
-    stage_filter = fc3.selectbox("Stage", ["All stages"] + STAGES)
+    st.caption("⚠️ Demo data — stored in this browser session only, resets on refresh.")
 
-    filtered = products
-    if risk_filter != "All risk":
-        target = {"High risk": "High Risk", "Moderate": "Moderate", "Low risk": "Low Risk", "Not assessed": "Not assessed"}[risk_filter]
-        filtered = [p for p in filtered if risk_band(p["score"]) == target]
-    if line_filter != "All business lines":
-        filtered = [p for p in filtered if p["business_line"] == line_filter]
-    if stage_filter != "All stages":
-        filtered = [p for p in filtered if p["stage"] == stage_filter]
+    with st.expander(f"🔍 Browse all products ({total})", expanded=(not pending)):
+        fc1, fc2, fc3 = st.columns(3)
+        risk_filter = fc1.selectbox(
+            "Risk", ["All risk", "High risk", "Moderate", "Low risk", "Not assessed"]
+        )
+        line_filter = fc2.selectbox("Business line", ["All business lines"] + BUSINESS_LINES)
+        stage_filter = fc3.selectbox("Stage", ["All stages"] + STAGES)
 
-    st.markdown(
-        '<div class="demo-notice">⚠️ Demo data — registrations and assessments are stored '
-        'in this browser session only and reset on refresh.</div>',
-        unsafe_allow_html=True,
-    )
+        filtered = products
+        if risk_filter != "All risk":
+            target = {"High risk": "High Risk", "Moderate": "Moderate", "Low risk": "Low Risk", "Not assessed": "Not assessed"}[risk_filter]
+            filtered = [p for p in filtered if risk_band(p["score"]) == target]
+        if line_filter != "All business lines":
+            filtered = [p for p in filtered if p["business_line"] == line_filter]
+        if stage_filter != "All stages":
+            filtered = [p for p in filtered if p["stage"] == stage_filter]
 
-    st.subheader(f"Products — {len(filtered)} of {total} items")
+        st.write(f"**{len(filtered)} of {total} products**")
 
-    if not filtered:
-        st.info("No products match the selected filters.")
+        if not filtered:
+            st.info("No products match the selected filters.")
 
-    for row_start in range(0, len(filtered), 3):
-        row = filtered[row_start:row_start + 3]
-        cols = st.columns(3)
-        for col, p in zip(cols, row):
-            band = risk_band(p["score"])
-            color = risk_color(band)
-            score_text = f"{p['score']}/100" if p["score"] is not None else "—"
-            with col:
-                st.markdown(
-                    f"""
-                    <div class="product-card">
-                        <div class="product-name">{p['name']}</div>
-                        <div class="product-meta">{p['type']}</div>
-                        <div class="product-meta">{p['business_line']} · {p['stage']}</div>
-                        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:0.7rem;">
-                            <span class="score-num" style="color:{color};">{score_text}</span>
-                            {badge(band, color)}
+        for row_start in range(0, len(filtered), 3):
+            row = filtered[row_start:row_start + 3]
+            cols = st.columns(3)
+            for col, p in zip(cols, row):
+                band = risk_band(p["score"])
+                color = risk_color(band)
+                score_text = f"{p['score']}/100" if p["score"] is not None else "—"
+                with col:
+                    st.markdown(
+                        f"""
+                        <div class="product-card">
+                            <div class="product-name">{p['name']}</div>
+                            <div class="product-meta">{p['type']}</div>
+                            <div class="product-meta">{p['business_line']} · {p['stage']}</div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:0.7rem;">
+                                <span class="score-num" style="color:{color};">{score_text}</span>
+                                {badge(band, color)}
+                            </div>
                         </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-                if st.button("Open assessment →", key=f"open_{p['id']}", use_container_width=True):
-                    st.session_state.selected_product = p["id"]
-                    st.session_state.page = "Assess"
-                    st.rerun()
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                    if st.button("Open assessment →", key=f"open_{p['id']}", use_container_width=True):
+                        st.session_state.selected_product = p["id"]
+                        st.session_state.page = "Assess"
+                        st.rerun()
 
 
 # ----------------------------------------------------------------------
@@ -1227,8 +1243,8 @@ def assess_page():
         """
         <div class="gov-hero">
             <h1>Assessment</h1>
-            <p>Run the six-module multi-agent assessment to generate a governance score
-            and risk band for a registered AI/ML product.</p>
+            <p>Run the assessment to get a governance decision. Expand any section below
+            for the control-level evidence behind it.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1291,19 +1307,6 @@ def assess_page():
             })
 
             actions_html = "".join(f"<li>{a}</li>" for a in contract["actions"])
-            cap_note_html = ""
-            if capped:
-                cap_note_html = f"""
-                <div style="margin-top:0.5rem;padding:0.5rem 0.7rem;background:{RED}10;
-                            border:1px solid {RED}40;border-radius:8px;font-size:0.82rem;color:{INK};">
-                    <strong style="color:{RED};">Severity cap applied:</strong>
-                    the average score was {avg_score}, but a <strong>{capped['severity']}</strong>
-                    control was Not Met (\u201c{capped['question']}\u201d), so the band is capped at
-                    <strong>{band}</strong> regardless of the average \u2014 one critical gap
-                    can't be offset by passing minor controls.
-                    <span style="color:#6B6557;">({capped['citation']})</span>
-                </div>
-                """
 
             st.markdown(
                 f"""
@@ -1328,13 +1331,31 @@ def assess_page():
                         <span><strong>SLA:</strong> {contract['sla']}</span>
                         <span><strong>Next review:</strong> {product['review_date'].strftime('%b %d, %Y')}</span>
                     </div>
-                    {cap_note_html}
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
-            # Per-module agent score breakdown
+            if capped:
+                with st.expander(f"⚠️ Why {band}? A {capped['severity']} control capped this score", expanded=False):
+                    st.markdown(
+                        f"""
+                        <div style="font-size:0.86rem;color:{INK};">
+                            The average score across all answered controls was <strong>{avg_score}</strong>,
+                            which on its own would land in a higher band. But a
+                            <strong style="color:{RED};">{capped['severity']}</strong>-severity control was
+                            <strong>Not Met</strong>: “{capped['question']}” — so the band is capped at
+                            <strong>{band}</strong> regardless of the average. One critical gap can't be
+                            offset by passing minor controls.
+                            <div style="margin-top:0.4rem;color:#6B6557;font-size:0.8rem;">
+                                Citation: {capped['citation']}
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+            # Per-module agent score breakdown — collapsed by default
             rows_html = ""
             for m in MODULES:
                 m_scores = [answers[(m["title"], qi)] for qi in range(len(m["questions"]))
@@ -1358,12 +1379,8 @@ def assess_page():
                         f'<div class="mscore-val" style="color:#8A8475;">\u2014</div>'
                         f'</div>'
                     )
-            st.markdown(
-                f'<div class="product-card" style="margin-top:0.6rem;">'
-                f'<div style="font-weight:700;margin-bottom:0.6rem;color:{INK};">'
-                f'Module evidence breakdown</div>{rows_html}</div>',
-                unsafe_allow_html=True,
-            )
+            with st.expander("📊 Module evidence breakdown", expanded=False):
+                st.markdown(rows_html, unsafe_allow_html=True)
 
     st.write("")
 
@@ -1421,24 +1438,24 @@ def assess_page():
 
     st.write("")
 
-    st.markdown(
-        f"""
-        <div class="product-card" style="padding:0.7rem 1rem;">
-            <span style="font-weight:700;color:{INK};margin-right:0.8rem;">Control stack:</span>
+    st.write("")
+
+    with st.expander("ℹ️ About the control stack (Evaluation · Guardrail · Governance)", expanded=False):
+        st.markdown(
+            f"""
             {badge("Evaluation — measures (Is this good?)", LAYER_COLORS['Evaluation'])}&nbsp;
             {badge("Guardrail — enforces (Is this allowed?)", LAYER_COLORS['Guardrail'])}&nbsp;
             {badge("Governance — decides (What happens next?)", LAYER_COLORS['Governance'])}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+            """,
+            unsafe_allow_html=True,
+        )
     st.write("")
 
     # Render each module as an expander
     for i, m in enumerate(MODULES):
         n_answered = sum(1 for q in range(len(m["questions"])) if (m["title"], q) in answers)
         icon = "✅" if n_answered == len(m["questions"]) else ("🟡" if n_answered else "⬜")
-        with st.expander(f"{icon} Module {i+1} · {m['title']}  —  {m['ref']}", expanded=(i == 0)):
+        with st.expander(f"{icon} Module {i+1} · {m['title']}  —  {m['ref']}", expanded=False):
             st.write(m["desc"])
             for qi, q in enumerate(m["questions"]):
                 key = f"{product['id']}_{m['title']}_{qi}"
@@ -1460,16 +1477,17 @@ def assess_page():
                     status = control_status(current)
                     status_color = CONTROL_STATUS_COLOR.get(status, "#6B7280")
 
+                    # Single compact signal: a colored left accent (severity)
+                    # carried by the container border, plus one status badge
+                    # next to the question — citation/layer tucked behind a
+                    # "details" toggle so the default view reads as a list
+                    # of questions + statuses, not a wall of metadata.
                     st.markdown(
-                        f"**{qi+1:02d}. {q['q']}** &nbsp;"
-                        f"{badge(layer, lcolor)}&nbsp;{badge(severity, sev_color)}&nbsp;{badge(status, status_color)}",
+                        f"<div style='border-left:3px solid {sev_color};padding-left:0.6rem;'>"
+                        f"<strong>{qi+1:02d}. {q['q']}</strong> &nbsp;{badge(status, status_color)}"
+                        f"</div>",
                         unsafe_allow_html=True,
                     )
-                    if q.get("citation"):
-                        st.markdown(
-                            f"<span style='font-size:0.74rem;color:#8A8475;'>\u2693 {q['citation']}</span>",
-                            unsafe_allow_html=True,
-                        )
                     choice = st.radio(
                         "Response",
                         option_labels,
@@ -1483,22 +1501,33 @@ def assess_page():
                         if label == choice:
                             answers[(m["title"], qi)] = score
 
-                    # Level 3 — remediation, shown only for controls that
-                    # aren't fully Met
                     new_status = control_status(answers.get((m["title"], qi)))
+                    detail_bits = []
+                    if q.get("citation"):
+                        detail_bits.append(f"⚓ {q['citation']}")
+                    detail_bits.append(f"Severity: {severity}")
+                    detail_bits.append(f"Layer: {layer}")
+                    r_owner, r_date = (None, None)
                     if new_status in ("Not Met", "Partial"):
                         r_owner, r_date = _remediation_for(m["title"], qi, severity)
+
+                    with st.expander("Details", expanded=False):
                         st.markdown(
-                            f"""
-                            <div style="margin-top:0.4rem;padding:0.45rem 0.7rem;
-                                        background:{CONTROL_STATUS_COLOR[new_status]}10;
-                                        border-left:3px solid {CONTROL_STATUS_COLOR[new_status]};
-                                        border-radius:6px;font-size:0.78rem;color:{INK};">
-                                <strong>Remediation:</strong> {r_owner} \u00b7 target {r_date.strftime('%b %d, %Y')}
-                            </div>
-                            """,
+                            f"<span style='font-size:0.78rem;color:#6B6557;'>{' &nbsp;·&nbsp; '.join(detail_bits)}</span>",
                             unsafe_allow_html=True,
                         )
+                        if r_owner:
+                            st.markdown(
+                                f"""
+                                <div style="margin-top:0.4rem;padding:0.45rem 0.7rem;
+                                            background:{CONTROL_STATUS_COLOR[new_status]}10;
+                                            border-left:3px solid {CONTROL_STATUS_COLOR[new_status]};
+                                            border-radius:6px;font-size:0.78rem;color:{INK};">
+                                    <strong>Remediation:</strong> {r_owner} \u00b7 target {r_date.strftime('%b %d, %Y')}
+                                </div>
+                                """,
+                                unsafe_allow_html=True,
+                            )
 
 
 # ----------------------------------------------------------------------
@@ -1916,6 +1945,94 @@ def roadmap_page():
         unsafe_allow_html=True,
     )
 
+    # ------------------------------------------------------------------
+    # Product KPIs — metrics OF the tool itself (adoption, effectiveness,
+    # trust), distinct from the governance/risk metrics it produces about
+    # the AI systems it tracks. Illustrative only: this prototype has no
+    # persistence or event tracking yet, so these numbers are mocked to
+    # show the shape of what real instrumentation would report.
+    # ------------------------------------------------------------------
+    st.markdown(
+        f"""
+        <div class="product-card" style="padding:0.8rem 1.1rem;margin-bottom:0.8rem;">
+            <strong style="color:{INK};">Is the tool itself working?</strong>
+            <span style="font-size:0.85rem;color:#6B6557;">
+            The metrics above (risk scores, findings, overdue reviews) describe the AI systems
+            being governed. The KPIs below would describe the Command Centre itself — adoption,
+            effectiveness, and trust — once real usage tracking exists.
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("📐 Illustrative product KPIs (mocked — not yet tracked)", expanded=False):
+        kcol1, kcol2, kcol3 = st.columns(3)
+        with kcol1:
+            st.markdown(f"<div style='font-weight:700;color:{NAVY};margin-bottom:0.4rem;'>ADOPTION</div>", unsafe_allow_html=True)
+            st.markdown(
+                f"""
+                <div class="product-card" style="padding:0.7rem 0.9rem;margin-bottom:0.5rem;">
+                    <div class="score-num" style="color:{NAVY};font-size:1.5rem;">7 of 9</div>
+                    <div class="product-meta">product owners have run at least one assessment</div>
+                </div>
+                <div class="product-card" style="padding:0.7rem 0.9rem;margin-bottom:0.5rem;">
+                    <div class="score-num" style="color:{NAVY};font-size:1.5rem;">4.2 days</div>
+                    <div class="product-meta">avg. time from registration to first assessment</div>
+                </div>
+                <div class="product-card" style="padding:0.7rem 0.9rem;">
+                    <div class="score-num" style="color:{NAVY};font-size:1.5rem;">78%</div>
+                    <div class="product-meta">of registered systems have a current (non-stale) assessment</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with kcol2:
+            st.markdown(f"<div style='font-weight:700;color:{FOREST};margin-bottom:0.4rem;'>EFFECTIVENESS</div>", unsafe_allow_html=True)
+            st.markdown(
+                f"""
+                <div class="product-card" style="padding:0.7rem 0.9rem;margin-bottom:0.5rem;">
+                    <div class="score-num" style="color:{FOREST};font-size:1.5rem;">11 days</div>
+                    <div class="product-meta">avg. time from Critical finding logged to remediated</div>
+                </div>
+                <div class="product-card" style="padding:0.7rem 0.9rem;margin-bottom:0.5rem;">
+                    <div class="score-num" style="color:{FOREST};font-size:1.5rem;">64%</div>
+                    <div class="product-meta">of findings closed before their target date</div>
+                </div>
+                <div class="product-card" style="padding:0.7rem 0.9rem;">
+                    <div class="score-num" style="color:{AMBER};font-size:1.5rem;">2</div>
+                    <div class="product-meta">findings that recurred across 2+ review cycles</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with kcol3:
+            st.markdown(f"<div style='font-weight:700;color:{AMBER};margin-bottom:0.4rem;'>TRUST & QUALITY</div>", unsafe_allow_html=True)
+            st.markdown(
+                f"""
+                <div class="product-card" style="padding:0.7rem 0.9rem;margin-bottom:0.5rem;">
+                    <div class="score-num" style="color:{AMBER};font-size:1.5rem;">91%</div>
+                    <div class="product-meta">of governance decisions followed without override</div>
+                </div>
+                <div class="product-card" style="padding:0.7rem 0.9rem;margin-bottom:0.5rem;">
+                    <div class="score-num" style="color:{AMBER};font-size:1.5rem;">~18 min</div>
+                    <div class="product-meta">avg. time to complete a full 37-question assessment</div>
+                </div>
+                <div class="product-card" style="padding:0.7rem 0.9rem;">
+                    <div class="score-num" style="color:{AMBER};font-size:1.5rem;">3</div>
+                    <div class="product-meta">severity caps challenged/corrected by a reviewer</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        st.caption(
+            "These numbers are illustrative — this prototype doesn't yet persist usage events, "
+            "override history, or remediation timestamps. Real tracking is scoped under "
+            "**Q1 2027 — Operations** below."
+        )
+
+    st.write("")
+
     quarters = [
         {
             "title": "Q3 2026 — Foundations",
@@ -1938,6 +2055,7 @@ def roadmap_page():
             "items": [
                 ("Model inventory system integration", "Exploring"),
                 ("Review-reminder & notification workflows", "Planned"),
+                ("Product usage & effectiveness KPIs", "Planned"),
                 ("Dashboard analytics: trends over time", "Exploring"),
             ],
         },
