@@ -29,6 +29,7 @@ INK = "#1F2A37"
 NAVY = "#1E3A5F"
 FOREST = "#2A7A55"
 AMBER = "#C8860D"
+RED = "#B3261E"
 
 st.markdown(f"""
 <style>
