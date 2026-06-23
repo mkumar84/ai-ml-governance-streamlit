@@ -679,8 +679,98 @@ DATA_TYPES = [
 ]
 
 # ----------------------------------------------------------------------
-# Risk helpers
+# Inherent risk characterization — captures risk that exists BEFORE any
+# controls are applied, across four factors: autonomy, reversibility,
+# data sensitivity, and customer impact. Each factor is scored 1-4
+# (Low/Moderate/High/Critical). The inherent risk rating is the highest
+# single factor (not an average) — one Critical factor makes the system
+# Critical regardless of the others, mirroring how real inherent risk
+# assessments work in financial services.
 # ----------------------------------------------------------------------
+AUTONOMY_LEVELS = [
+    "Human decides — AI only provides information or drafts",
+    "Human approves every AI recommendation before action",
+    "AI acts automatically; human can override after the fact",
+    "Fully autonomous — no human review of individual actions",
+]
+REVERSIBILITY_LEVELS = [
+    "Fully reversible — any action can be undone without consequence",
+    "Reversible with effort — requires manual correction",
+    "Partially reversible — some downstream impact before correction",
+    "Irreversible — actions cannot be undone (payments, communications sent)",
+]
+DATA_SENSITIVITY_LEVELS = [
+    "No personal data — internal or publicly available data only",
+    "Non-sensitive personal data — anonymized or aggregated",
+    "Sensitive personal data — PHI, financial, demographic",
+    "Highly sensitive — biometric, health + financial combined, or SIN",
+]
+CUSTOMER_IMPACT_LEVELS = [
+    "No direct customer impact — internal process only",
+    "Indirect customer impact — affects internal decisions about customers",
+    "Direct customer impact — affects customer-facing outputs or communications",
+    "High-stakes customer impact — affects coverage, claims, eligibility, or finances",
+]
+
+INHERENT_FACTOR_LABELS = [
+    "Autonomy level",
+    "Action reversibility",
+    "Data sensitivity",
+    "Customer / stakeholder impact",
+]
+INHERENT_FACTOR_OPTIONS = [
+    AUTONOMY_LEVELS,
+    REVERSIBILITY_LEVELS,
+    DATA_SENSITIVITY_LEVELS,
+    CUSTOMER_IMPACT_LEVELS,
+]
+
+INHERENT_RISK_BANDS = {
+    0: "Low",
+    1: "Low",
+    2: "Moderate",
+    3: "High",
+    4: "Critical",  # index 3 = highest option = score 4 (1-indexed)
+}
+INHERENT_RISK_COLORS = {
+    "Low": "#2A7A55",
+    "Moderate": "#C8860D",
+    "High": "#B3261E",
+    "Critical": "#7B0000",
+    "Not assessed": "#6B7280",
+}
+
+
+def compute_inherent_risk(factor_scores):
+    """
+    factor_scores: list of 0-3 indices (one per factor, 0=lowest, 3=highest).
+    Returns (band_label, dominant_factor_index).
+    Highest single factor drives the band — not an average.
+    """
+    if not factor_scores or all(s is None for s in factor_scores):
+        return "Not assessed", None
+    valid = [(i, s) for i, s in enumerate(factor_scores) if s is not None]
+    dominant_idx, max_score = max(valid, key=lambda x: x[1])
+    band = INHERENT_RISK_BANDS.get(max_score + 1, "Not assessed")
+    return band, dominant_idx
+
+
+def inherent_risk_seed(product_name, product_type):
+    """Deterministic inherent risk scores for seeded products."""
+    seeds = {
+        "Group Benefits Pricing Agent": [3, 2, 2, 3],
+        "Voice-of-Customer NLP": [0, 0, 1, 1],
+        "Vendor Risk Scoring Model": [1, 1, 1, 1],
+        "Marketing Content Generator": [1, 1, 0, 1],
+        "Customer Churn Predictor": [1, 1, 2, 2],
+        "Fraud Anomaly Detector": [2, 1, 2, 3],
+        "Underwriting Decision Engine": [3, 2, 3, 3],
+        "Advisor Knowledge Assistant": [1, 0, 2, 2],
+        "Claims Summarization Copilot": [0, 0, 2, 2],
+    }
+    return seeds.get(product_name, [1, 1, 1, 1])
+
+
 def risk_band(score):
     if score is None:
         return "Not assessed"
@@ -960,8 +1050,9 @@ def seed_products():
             "score": final_score_or(avg_score, final_band),
             "raw_avg_score": avg_score,
             "capped_by": capped,
-            "answered_count": TOTAL_QUESTIONS,  # treat seeds as fully assessed
+            "answered_count": TOTAL_QUESTIONS,
             "history": history,
+            "inherent_risk_scores": inherent_risk_seed(name, ptype),
         })
     return products
 
@@ -1178,18 +1269,22 @@ def portfolio_page():
                 color = risk_color(band)
                 score_text = f"{p['score']}/100" if p["score"] is not None else "—"
                 with col:
+                    ir_s = p.get("inherent_risk_scores") or []
+                    ir_b, _ = compute_inherent_risk(ir_s)
+                    ir_c = INHERENT_RISK_COLORS.get(ir_b, "#6B7280")
                     st.markdown(
-                        f"""
-                        <div class="product-card">
-                            <div class="product-name">{p['name']}</div>
-                            <div class="product-meta">{p['type']}</div>
-                            <div class="product-meta">{p['business_line']} · {p['stage']}</div>
-                            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:0.7rem;">
-                                <span class="score-num" style="color:{color};">{score_text}</span>
-                                {badge(band, color)}
-                            </div>
-                        </div>
-                        """,
+                        f'<div class="product-card">'
+                        f'<div class="product-name">{p["name"]}</div>'
+                        f'<div class="product-meta">{p["type"]}</div>'
+                        f'<div class="product-meta">{p["business_line"]} · {p["stage"]}</div>'
+                        f'<div style="display:flex;align-items:center;justify-content:space-between;margin-top:0.7rem;">'
+                        f'<span class="score-num" style="color:{color};">{score_text}</span>'
+                        f'{badge(band, color)}'
+                        f'</div>'
+                        f'<div style="margin-top:5px;font-size:0.74rem;color:#6B6557;">'
+                        f'Inherent: {badge(ir_b, ir_c)}'
+                        f'</div>'
+                        f'</div>',
                         unsafe_allow_html=True,
                     )
                     bcol1, bcol2 = st.columns([2, 1.2])
@@ -1265,7 +1360,33 @@ def register_page():
         st.markdown("**Types of data used by this system ***")
         data_types = st.multiselect("Data types", DATA_TYPES, label_visibility="collapsed")
 
-        owner_name = st.text_input("Product Owner Name *")
+        st.markdown("##### 2. Inherent Risk Characterization")
+        st.caption(
+            "Inherent risk = the risk that exists BEFORE any controls. "
+            "Select the option that best describes this system's natural risk exposure across four factors."
+        )
+        inherent_scores = []
+        for label, options in zip(INHERENT_FACTOR_LABELS, INHERENT_FACTOR_OPTIONS):
+            choice = st.selectbox(
+                label,
+                ["Select…"] + options,
+                key=f"ir_{label}",
+            )
+            score = options.index(choice) if choice in options else None
+            inherent_scores.append(score)
+        ir_band, ir_dom = compute_inherent_risk(
+            [s for s in inherent_scores if s is not None] or None
+        )
+        if any(s is not None for s in inherent_scores):
+            ir_color = INHERENT_RISK_COLORS.get(ir_band, "#6B7280")
+            ir_dom_label = INHERENT_FACTOR_LABELS[ir_dom] if ir_dom is not None else ""
+            st.markdown(
+                f'Inherent risk preview: {badge(ir_band, ir_color)} '
+                f'<span style="font-size:0.8rem;color:#6B6557;">driven by {ir_dom_label}</span>',
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("##### 3. Ownership & Review")
         owner_email = st.text_input("Product Owner Email *")
         approver = st.text_input(
             "Accountable Approver",
@@ -1321,6 +1442,7 @@ def register_page():
                 "capped_by": None,
                 "answered_count": 0,
                 "history": [],
+                "inherent_risk_scores": inherent_scores,
             })
             st.session_state.selected_product = new_id
             st.session_state.page = "Assess"
@@ -1394,6 +1516,67 @@ def assess_page():
     answered_count = sum(1 for m in MODULES for q in range(len(m["questions"]))
                           if (m["title"], q) in answers)
     progress = answered_count / TOTAL_QUESTIONS
+
+    # Inherent vs residual risk panel — the core framing: what is the
+    # risk before controls (inherent), and what remains after (residual).
+    ir_scores = product.get("inherent_risk_scores") or []
+    ir_band, ir_dom = compute_inherent_risk(ir_scores)
+    ir_color = INHERENT_RISK_COLORS.get(ir_band, "#6B7280")
+    ir_dom_label = INHERENT_FACTOR_LABELS[ir_dom] if ir_dom is not None else ""
+
+    res_band = risk_band(product["score"]) if product["score"] is not None else "Not assessed"
+    res_color = risk_color(res_band)
+    res_score = f"{product['score']}/100" if product["score"] is not None else "—"
+
+    ir_driven_html = (
+        f'<div style="font-size:0.76rem;color:#6B6557;margin-top:4px;">Driven by: {ir_dom_label}</div>'
+        if ir_dom_label else ""
+    )
+
+    ir_rows = ""
+    for i, (label, options) in enumerate(zip(INHERENT_FACTOR_LABELS, INHERENT_FACTOR_OPTIONS)):
+        score_idx = ir_scores[i] if i < len(ir_scores) and ir_scores[i] is not None else None
+        option_text = options[score_idx] if score_idx is not None else "Not characterised"
+        factor_color = INHERENT_RISK_COLORS.get(
+            INHERENT_RISK_BANDS.get(score_idx + 1 if score_idx is not None else 0, "Low"), "#6B7280"
+        )
+        ir_rows += (
+            f'<div style="display:flex;gap:0.6rem;align-items:flex-start;'
+            f'padding:5px 0;border-bottom:1px solid #E5E0D5;">'
+            f'<div style="width:160px;font-size:0.78rem;font-weight:600;'
+            f'color:{INK};flex-shrink:0;">{label}</div>'
+            f'<div style="font-size:0.78rem;color:#6B6557;flex:1;">{option_text}</div>'
+            f'</div>'
+        )
+
+    with st.expander("⚖️ Inherent risk vs residual risk", expanded=True):
+        st.markdown(
+            f'<div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.7rem;">'
+            f'<div class="product-card" style="flex:1;min-width:200px;border-left:4px solid {ir_color};padding:0.8rem 1rem;">'
+            f'<div style="font-size:0.74rem;font-weight:700;color:{ir_color};text-transform:uppercase;'
+            f'letter-spacing:0.03em;margin-bottom:4px;">Inherent Risk</div>'
+            f'<div style="font-size:1.4rem;font-weight:800;color:{ir_color};">{ir_band}</div>'
+            f'<div style="font-size:0.78rem;color:#6B6557;">before any controls are applied</div>'
+            f'{ir_driven_html}'
+            f'</div>'
+            f'<div style="display:flex;align-items:center;font-size:1.4rem;color:#8A8475;">→</div>'
+            f'<div class="product-card" style="flex:1;min-width:200px;border-left:4px solid {res_color};padding:0.8rem 1rem;">'
+            f'<div style="font-size:0.74rem;font-weight:700;color:{res_color};text-transform:uppercase;'
+            f'letter-spacing:0.03em;margin-bottom:4px;">Residual Risk</div>'
+            f'<div style="font-size:1.4rem;font-weight:800;color:{res_color};">{res_band}</div>'
+            f'<div style="font-size:0.78rem;color:#6B6557;">after controls assessed — score {res_score}</div>'
+            f'</div>'
+            f'</div>'
+            f'<div style="font-size:0.82rem;font-weight:600;color:{INK};margin-bottom:6px;">'
+            f'Inherent risk factors</div>'
+            f'{ir_rows}',
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            "Inherent risk = worst-case exposure if no controls existed. "
+            "Residual risk = what remains after controls are assessed (the score above). "
+            "The governance decision is based on residual risk; inherent risk sets the baseline."
+        )
 
     st.write("")
     pcol1, pcol2 = st.columns([3, 1])
@@ -2357,6 +2540,22 @@ def compare_page():
             )
             if p["capped_by"]:
                 st.caption(f"⚠️ Capped by {p['capped_by']['severity']} finding")
+
+    st.write("")
+    st.markdown("#### Inherent risk vs residual risk")
+    ir_cols = st.columns([1.4] + [2] * n)
+    ir_cols[0].markdown("<span style='font-weight:600;font-size:0.78rem;color:#6B6557;'>INHERENT</span>", unsafe_allow_html=True)
+    for col, p in zip(ir_cols[1:], products):
+        ir_s = p.get("inherent_risk_scores") or []
+        ir_b, _ = compute_inherent_risk(ir_s)
+        ir_c = INHERENT_RISK_COLORS.get(ir_b, "#6B7280")
+        col.markdown(badge(ir_b, ir_c), unsafe_allow_html=True)
+    ir_cols2 = st.columns([1.4] + [2] * n)
+    ir_cols2[0].markdown("<span style='font-weight:600;font-size:0.78rem;color:#6B6557;'>RESIDUAL</span>", unsafe_allow_html=True)
+    for col, p in zip(ir_cols2[1:], products):
+        r_b = risk_band(p["score"])
+        r_c = risk_color(r_b)
+        col.markdown(badge(r_b, r_c), unsafe_allow_html=True)
 
     st.write("")
     st.markdown("#### Module-by-module scores")
