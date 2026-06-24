@@ -1189,11 +1189,11 @@ def portfolio_page():
     st.markdown(f"#### Governance Action Queue")
     tab_all, tab_blocked, tab_overdue = st.tabs([f"All ({n_all})", f"Blocked ({n_blocked})", f"Overdue ({n_overdue})"])
 
-    def render_queue_table(rows):
+    def render_queue_table(rows, prefix="q"):
         if not rows:
             st.info("Nothing in this view — portfolio is in good standing.")
             return
-        for p, action, sla_text, color in rows:
+        for row_idx, (p, action, sla_text, color) in enumerate(rows):
             crit_count = sum(
                 1 for m in MODULES for qi, q in enumerate(m["questions"])
                 if (m["title"], qi) in p["answers"]
@@ -1220,18 +1220,18 @@ def portfolio_page():
                 f'<span style="color:#8A8475;"> → {p.get("approver", "AI Governance Lead")}</span>',
                 unsafe_allow_html=True,
             )
-            if row_cols[4].button("Open →", key=f"queue_open_{p['id']}_{action}", use_container_width=True):
+            if row_cols[4].button("Open →", key=f"{prefix}_{row_idx}_{p['id']}", use_container_width=True):
                 st.session_state.selected_product = p["id"]
                 st.session_state.page = "Assess"
                 st.rerun()
             st.markdown('<hr style="margin:0.3rem 0;border-color:#E5E0D5;">', unsafe_allow_html=True)
 
     with tab_all:
-        render_queue_table(all_queue)
+        render_queue_table(all_queue, "qa")
     with tab_blocked:
-        render_queue_table(blocked)
+        render_queue_table(blocked, "qb")
     with tab_overdue:
-        render_queue_table(overdue)
+        render_queue_table(overdue, "qo")
 
     if all_queue:
         st.caption("See the **Findings** page for the full control-level breakdown behind every score.")
